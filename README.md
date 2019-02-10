@@ -1,13 +1,13 @@
 # AI-Assign1
 
-##Cost Calculation
+## Cost Calculation
 
 
 
-##Associated Heuristic Function
+## Associated Heuristic Function
 
 
 
-##Graphical Output
+## Graphical Output
 
 ![alt text](https://github.com/SpencerCBryson/AI-Assign1/blob/master/Map.JPG)

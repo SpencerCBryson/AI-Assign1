@@ -2,4 +2,4 @@
 
 Writeup
 
-![Screenshot](Map.jpg)
+![alt text](https://raw.github.com/SpencerCBryson/AI-Assign1/blob/master/Map.JPG)

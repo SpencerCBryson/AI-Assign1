@@ -13,10 +13,10 @@ from Queue import *
 import math
 
 # bounds of the window, in lat/long
-LEFTLON = -78.8323000
-RIGHTLON = -78.8759000
-TOPLAT = 43.9324000
-BOTLAT = 43.9501000
+LEFTLON = -78.9035
+RIGHTLON = -78.8085
+TOPLAT = 43.9448
+BOTLAT = 43.8765
 WIDTH = RIGHTLON-LEFTLON
 HEIGHT = TOPLAT-BOTLAT
 # ratio of one degree of longitude to one degree of latitude 
@@ -301,7 +301,7 @@ def build_elevs(efilename):
 
 def build_graph(elevs):
     ''' Build the search graph from the OpenStreetMap XML. '''
-    tree = ET.parse('dbv2.osm')
+    tree = ET.parse('map.osm')
     root = tree.getroot()
 
     nodes = dict()

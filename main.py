@@ -1,3 +1,4 @@
+# Python2.7
 '''
  A*, path planner solution
 
@@ -31,17 +32,27 @@ EPIX = 3601
 MPERLAT = 111000
 MPERLON = MPERLAT*LONRATIO
 
-def node_dist(n1, n2):
-    ''' Euclidean istance between nodes n1 and n2, in meters. '''
-    dx = (n2.pos[0]-n1.pos[0])*MPERLON
-    dy = (n2.pos[1]-n1.pos[1])*MPERLAT
-    return math.sqrt(dx*dx+dy*dy)
+def node_dist(src, dest):
+    ''' Euclidean distance between the source and goal node, in meters. '''
+    dx = (dest.pos[0]-src.pos[0])*MPERLON
+    dy = (dest.pos[1]-src.pos[1])*MPERLAT
+    return math.sqrt(dx**2 + dy**2)
 
 def elev_cost(src, dest):
-    ''' If there is an increase in elevation, calculate cost.'''
+    ''' 
+    If there is an increase in elevation, calculate cost.
+
+    The cost is the difference in elevation which is squared in order to increase
+    its contribution to the overall cost.
+
+    Since this is meant for walking, climbing a hill is physically expensive and walking downhill
+    is considered free.
+    '''
     cost = 0
     if dest.elev > src.elev:
-            cost = (dest.elev-src.elev)*2
+            # change in elevation squared to place higher importance on
+            cost = (dest.elev-src.elev)**2
+
     return cost
 
 class Node():
@@ -94,19 +105,21 @@ class Planner():
 
     def heur(self,node,gnode):
         '''
-        Heuristic function a combination of straight-line (flat) distance
-        and change in elevation.
-        
-        Since the actual cost only adds to this distance, and since the elevation cost is the absolute
-        minimum height to be covered, this is admissible.
+        Heuristic function is a combination of euclidean distance and change in elevation.
+
+        Euclidean distance gives the most direct path to the goal node, which will always be equal or lesser than
+        the actual cost.
+
+        Similiarly, the elevation distance is the absolute minimum elevation required to reach the goal node, meaning
+        it will always be equal or lesser than the actual cost.
+
+        Since neither of these distances will ever over-estimate the cost, the heuristic is admissable.
         '''
         
         distCost = node_dist(node,gnode)
         elevCost = elev_cost(node,gnode)
 
         totalCost = distCost + elevCost
-
-        #print distCost, elevCost, totalCost
 
         return totalCost
     
@@ -121,13 +134,13 @@ class Planner():
         parents[s] = None
         costs[s] = 0
 
-        print self.heur(s,g)
+        print "Heuristic predicts cost as:", self.heur(s,g)
 
         while not q.empty():
             cf, cnode = q.get()
             if cnode == g:
-                print ("Path found, time will be",costs[g]*60/5000) #5 km/hr on flat
-                print costs[g]
+                print ("Path found, time will be", costs[g]*60/5000) #5 km/hr on flat
+                print "Actual cost:", costs[g]
                 return self.make_path(parents,g)
             for edge in cnode.ways:
                 newcost = costs[cnode] + edge.cost
@@ -168,11 +181,6 @@ class PlanWin(Frame):
         return self.lat_lon_to_elev(((TOPLAT-(y/TOYPIX)),((x/TOXPIX)+LEFTLON)))
 
     def lat_lon_to_elev(self,latlon):
-        # row is 0 for 43N, 1201 (EPIX) for 42N
-        #row = (int)((43 - latlon[0]) * EPIX)
-        # col is 0 for 18 E, 1201 for 19 E
-        #col = (int)((latlon[1]-18) * EPIX)
-
         row = int(round((latlon[0] - int(latlon[0])) * (EPIX-1), 0))
         col = int(round((latlon[1] - int(latlon[1])) * (EPIX-1), 0))
 
@@ -243,7 +251,7 @@ class PlanWin(Frame):
             #print node.id
         self.canvas.coords('path',*coords)
         
-    def __init__(self,master,nodes,ways,coastnodes,elevs):
+    def __init__(self,master,nodes,ways,elevs):
         self.whatis = {}
         self.nodes = nodes
         self.ways = ways
@@ -266,13 +274,7 @@ class PlanWin(Frame):
                 self.whatis[((int)(nextpix[0]),(int)(nextpix[1]))] = nlist[n+1]
                 w.create_line(thispix[0],thispix[1],nextpix[0],nextpix[1])
                 thispix = nextpix
-        # also draw the coast:
-        if len(coastnodes) > 0:
-            thispix = self.lat_lon_to_pix(self.nodes[coastnodes[0]].pos)
-            for n in range(len(coastnodes)-1):
-                nextpix = self.lat_lon_to_pix(self.nodes[coastnodes[n+1]].pos)
-                w.create_line(thispix[0],thispix[1],nextpix[0],nextpix[1],fill="blue")
-                thispix = nextpix
+
 
         #print(self.whatis)
         #w.create_rectangle(0, 0, 40, 40, fill='red')
@@ -312,9 +314,8 @@ def build_elevs(efilename):
     estr = efile.read()
     elevs = []
     for spot in range(0,len(estr),2):
+        # .bil hgt is little endian
         elevs.append(struct.unpack('<h',estr[spot:spot+2])[0])
-
-    #print elevs
 
     return elevs
 
@@ -326,14 +327,9 @@ def build_graph(elevs):
     nodes = dict()
     ways = dict()
     waytypes = set()
-    coastnodes = []
     for item in root:
         if item.tag == 'node':
             coords = ((float)(item.get('lat')),(float)(item.get('lon')))
-            # row is 0 for 43N, 1201 (EPIX) for 42N
-            #erow = (int)((43 - coords[0]) * EPIX)
-            # col is 0 for 18 E, 1201 for 19 E
-            #ecol = (int)((coords[1]-18) * EPIX)
             erow = int(round((coords[0] - int(coords[0])) * (EPIX-1), 0))
             ecol = int(round((coords[1] - int(coords[1])) * (EPIX-1), 0))
             try:
@@ -342,11 +338,6 @@ def build_graph(elevs):
                 el = 0
             nodes[(long)(item.get('id'))] = Node((long)(item.get('id')),coords,el)            
         elif item.tag == 'way':
-            if item.get('id') == '157161112': #main coastline way ID
-                for thing in item:
-                    if thing.tag == 'nd':
-                        coastnodes.append((long)(thing.get('ref')))
-                continue
             useme = False
             oneway = False
             myname = 'unnamed way'
@@ -378,16 +369,13 @@ def build_graph(elevs):
                         nodes[thisn].ways.append(Edge(ways[wayid],nodes[thisn],nodes[nextn]))
                         thisn = nextn                
                 ways[wayid].nodes = nlist
-    print len(coastnodes)
-    # print coastnodes[0]
-    # print nodes[coastnodes[0]]
-    return nodes, ways, coastnodes
+    return nodes, ways
 
 elevs = build_elevs("n43w079.bil")
-nodes, ways, coastnodes = build_graph(elevs)
+nodes, ways = build_graph(elevs)
 
 master = Tk()
-thewin = PlanWin(master,nodes,ways,coastnodes,elevs)
+thewin = PlanWin(master,nodes,ways,elevs)
 
 mainloop()
 

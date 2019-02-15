@@ -32,11 +32,18 @@ MPERLAT = 111000
 MPERLON = MPERLAT*LONRATIO
 
 def node_dist(n1, n2):
-    ''' Distance between nodes n1 and n2, in meters. '''
-    dx = (n2.pos[0]-n1.pos[0])*MPERLON #* 2 * int(n1.elev)
+    ''' Euclidean istance between nodes n1 and n2, in meters. '''
+    dx = (n2.pos[0]-n1.pos[0])*MPERLON
     dy = (n2.pos[1]-n1.pos[1])*MPERLAT
-    return math.sqrt(dx*dx+dy*dy) # in meters
- 
+    return math.sqrt(dx*dx+dy*dy)
+
+def elev_cost(src, dest):
+    ''' If there is an increase in elevation, calculate cost.'''
+    cost = 0
+    if dest.elev > src.elev:
+            cost = (dest.elev-src.elev)*2
+    return cost
+
 class Node():
     ''' Graph (map) node, not a search node! '''
     __slots__ = ('id', 'pos', 'ways', 'elev')
@@ -67,11 +74,8 @@ class Edge():
     def __init__(self, w, src, d):
         self.way = w
         self.dest = d
-        self.cost = node_dist(src,d)
-        if d.elev > src.elev:
-            self.cost += (d.elev-src.elev)*2
-            # if self.way.type == 'steps':
-            #     self.cost *= 1.5
+        self.cost = node_dist(src,d) #euclidean distance between nodes
+        self.cost += elev_cost(src,d) #elevation difference between nodes
 
 class Way():
     ''' A way is an entire street, for drawing, not searching. '''
@@ -90,10 +94,21 @@ class Planner():
 
     def heur(self,node,gnode):
         '''
-        Heuristic function is just straight-line (flat) distance.
-        Since the actual cost only adds to this distance, this is admissible.
+        Heuristic function a combination of straight-line (flat) distance
+        and change in elevation.
+        
+        Since the actual cost only adds to this distance, and since the elevation cost is the absolute
+        minimum height to be covered, this is admissible.
         '''
-        return node_dist(node,gnode)
+        
+        distCost = node_dist(node,gnode)
+        elevCost = elev_cost(node,gnode)
+
+        totalCost = distCost + elevCost
+
+        #print distCost, elevCost, totalCost
+
+        return totalCost
     
     def plan(self,s,g):
         '''
@@ -105,10 +120,14 @@ class Planner():
         q.put((self.heur(s,g),s))
         parents[s] = None
         costs[s] = 0
+
+        print self.heur(s,g)
+
         while not q.empty():
             cf, cnode = q.get()
             if cnode == g:
                 print ("Path found, time will be",costs[g]*60/5000) #5 km/hr on flat
+                print costs[g]
                 return self.make_path(parents,g)
             for edge in cnode.ways:
                 newcost = costs[cnode] + edge.cost
